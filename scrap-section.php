@@ -75,7 +75,7 @@ function callUrl($url)
     echo round($duration, 2) . 's';
     echo ' / Taille : ' . $humanReadableSize;
     echo "\n";
-    if(pageSansArticles($content)) die('Cette page ne contient pas d\'articles');
+    if(pageSansArticles($content)) die('Cette page ne contient pas d\'articles'."\n");
 }
 
 /**

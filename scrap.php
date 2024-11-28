@@ -3,6 +3,7 @@
 $redis = new Redis();
 $redis->connect('127.0.0.1', 6379);
 
+$verbose = in_array('--verbose', $argv);
 $refresh = in_array('--refresh', $argv);
 $recompute = in_array('--recompute', $argv);
 $start = null;
@@ -25,6 +26,12 @@ $totalUrls = 0; // Initialize total URLs count
 $processedUrls = 0; // Number of processed URLs
 $totalTimeSpent = 0; // Total time spent on URL calls
 $skipUntilStart = !empty($start); // Flag to indicate whether to skip URLs
+
+
+// Appel du script principal
+$sitemapUrl = 'https://www.sofoot.com/sitemap.xml';
+processSitemap($sitemapUrl);
+
 
 function processSitemap($sitemapUrl)
 {
@@ -151,8 +158,11 @@ function processSubSitemap($subSitemapUrl, $sIdx, $sTotal)
  */
 function callUrl($url)
 {
-    global $processedUrls, $totalUrls, $totalTimeSpent;
+    global $processedUrls, $totalUrls, $totalTimeSpent, $verbose;
 
+    i(!$verbose) {
+        return callUrlWithoutWaiting($url);
+    }
     $startTime = microtime(true); // Start timing
 
     // Context to retrieve headers
@@ -227,6 +237,37 @@ function humanReadableSize($size)
     return round($size / pow(1024, $i), 2) . ' ' . $unit[$i];
 }
 
-// Appel du script principal
-$sitemapUrl = 'https://www.sofoot.com/sitemap.xml';
-processSitemap($sitemapUrl);
+/**
+ * Envoie une requête GET à une URL sans attendre la réponse.
+ *
+ * @param string $url L'URL à appeler.
+ */
+function callUrlWithoutWaiting($url)
+{
+    $urlParts = parse_url($url);
+
+    if (!isset($urlParts['host'])) {
+        throw new InvalidArgumentException("Invalid URL: $url");
+    }
+
+    $host = $urlParts['host'];
+    $port = isset($urlParts['port']) ? $urlParts['port'] : ($urlParts['scheme'] === 'https' ? 443 : 80);
+    $path = isset($urlParts['path']) ? $urlParts['path'] : '/';
+    $path .= isset($urlParts['query']) ? '?' . $urlParts['query'] : '';
+
+    $scheme = ($urlParts['scheme'] === 'https') ? 'ssl://' : '';
+    $socket = fsockopen($scheme . $host, $port, $errno, $errstr, 30);
+
+    if (!$socket) {
+        throw new RuntimeException("Failed to open socket to $host: $errstr ($errno)");
+    }
+
+    $request = "GET $path HTTP/1.1\r\n";
+    $request .= "Host: $host\r\n";
+    $request .= "Connection: Close\r\n\r\n";
+
+    fwrite($socket, $request);
+    fclose($socket);
+}
+
+

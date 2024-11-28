@@ -15,10 +15,10 @@ foreach ($argv as $arg) {
     }
 }
 
-if($start == 'last') {
+if ($start == 'last') {
     $start = $redis->get('last_visited_url');
 }
-if($start || $refresh) {
+if ($start || $refresh) {
     $redis->del('visited_urls');
 }
 $totalUrlsKey = 'total_urls'; // Redis key for total URLs
@@ -160,51 +160,50 @@ function callUrl($url)
 {
     global $processedUrls, $totalUrls, $totalTimeSpent, $verbose;
 
-    if(!$verbose) {
-        return callUrlWithoutWaiting($url);
-    }
     $startTime = microtime(true); // Start timing
 
-    // Context to retrieve headers
-    $context = stream_context_create([
-        'http' => [
-            'method' => 'GET',
-            'follow_location' => true,
-            'timeout' => 10
-        ]
-    ]);
+    if (!$verbose) {
+        callUrlWithoutWaiting($url);
+        $cfCacheStatus = false;
+    } else {
+        // Context to retrieve headers
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'GET',
+                'follow_location' => true,
+                'timeout' => 10
+            ]
+        ]);
+        // Perform the request
+        $content = @file_get_contents($url, false, $context);
 
-    // Perform the request
-    $content = @file_get_contents($url, false, $context);
+        // Extract headers
+        $headers = $http_response_header ?? [];
+        $cfCacheStatus = 'Not Available';
+        foreach ($headers as $header) {
+            if (stripos($header, 'cf-cache-status:') !== false) {
+                $cfCacheStatus = trim(explode(':', $header, 2)[1]);
+                break;
+            }
+        }
+    }
 
     $endTime = microtime(true); // End timing
     $duration = $endTime - $startTime;
     $totalTimeSpent += $duration;
 
-    // Calculate content size
-    $contentSize = $content ? strlen($content) : 0;
-
-    // Extract headers
-    $headers = $http_response_header ?? [];
-    $cfCacheStatus = 'Not Available';
-    foreach ($headers as $header) {
-        if (stripos($header, 'cf-cache-status:') !== false) {
-            $cfCacheStatus = trim(explode(':', $header, 2)[1]);
-            break;
-        }
-    }
 
     $averageTime = $processedUrls ? $totalTimeSpent / $processedUrls : 0;
     $remainingUrls = $totalUrls - $processedUrls;
     $estimatedTimeRemaining = $averageTime * $remainingUrls;
 
     echo "\n\t\t";
-    echo $cfCacheStatus;
-    echo ' / ';
+    if ($cfCacheStatus) {
+        echo $cfCacheStatus;
+        echo ' / ';
+    }
     echo round($duration, 2) . 's';
-    echo ' / ';
-    echo humanReadableSize($contentSize);
-    echo "\n\t\t".'ETA ' . date('Y-m-d H:i:s', time() + $estimatedTimeRemaining) . ' - ' . formatDuration($estimatedTimeRemaining);
+    echo "\n\t\t" . 'ETA ' . date('Y-m-d H:i:s', time() + $estimatedTimeRemaining) . ' - ' . formatDuration($estimatedTimeRemaining);
 }
 
 /**
@@ -269,5 +268,3 @@ function callUrlWithoutWaiting($url)
     fwrite($socket, $request);
     fclose($socket);
 }
-
-

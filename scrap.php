@@ -160,7 +160,7 @@ function callUrl($url)
 {
     global $processedUrls, $totalUrls, $totalTimeSpent, $verbose;
 
-    i(!$verbose) {
+    if(!$verbose) {
         return callUrlWithoutWaiting($url);
     }
     $startTime = microtime(true); // Start timing
